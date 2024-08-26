@@ -286,3 +286,192 @@ def calculate_results(y_true, y_pred):
                   "recall": model_recall,
                   "f1": model_f1}
   return model_results
+
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import os
+import random
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.layers import RandomFlip, RandomRotation, RandomZoom, RandomHeight, RandomWidth, Rescaling
+
+def check_aug_img(train_data):
+  data_augmentation = keras.Sequential([
+    RandomFlip('horizontal'),
+    RandomRotation(0.2),
+    RandomZoom(0.2),
+    RandomHeight(0.2),
+    RandomWidth(0.2),
+    Rescaling(1./255)
+], name='data_augmentation')
+  target_class = random.choice(train_data.class_names)
+  target_dir = '10_food_classes_1_percent/train/' + target_class
+  random_image = random.choice(os.listdir(target_dir))
+  random_image_path = target_dir + '/' + random_image
+  print(random_image_path)
+
+  img = mpimg.imread(random_image_path)
+  plt.imshow(img)
+  plt.title(f'Original random image from class {target_class}')
+  plt.axis(False)
+
+  augmented_img = data_augmentation(tf.expand_dims(img, axis=0))
+  plt.figure()
+  plt.imshow(tf.squeeze(augmented_img))
+  plt.title(f'Augmented random image from class {target_class}')
+  plt.axis(False)
+
+def view_random_images(target_dir, target_class, num_images=4):
+    if not target_dir.endswith('/'):
+        target_dir += '/'
+
+    target_folder = target_dir + target_class
+
+    random_images = random.sample(os.listdir(target_folder), num_images)
+    print(f"Selected images: {random_images}")
+
+    plt.figure(figsize=(10, 10))
+
+    images = []
+    for i, img_name in enumerate(random_images):
+        img_path = target_folder + "/" + img_name
+        img = mpimg.imread(img_path)
+        images.append(img)
+
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img)
+        plt.title(f"{target_class} - {img_name}")
+        plt.axis('off')
+
+        print(f'Image shape: {img.shape}')
+
+    plt.tight_layout()  # Improve spacing between images
+    plt.show()  # Display all images in a single window
+
+    return images
+
+def load_and_prep_image(filename, img_shape=224):
+  """
+  Reads an image from filename, turns it into a tensor
+  and reshapes it to (img_shape, img_shape, colour_channel).
+  """
+  # Read in target file (an image)
+  img = tf.io.read_file(filename)
+
+  # Decode the read file into a tensor & ensure 3 colour channels
+  # (our model is trained on images with 3 colour channels and sometimes images have 4 colour channels)
+  img = tf.image.decode_image(img, channels=3)
+
+  # Resize the image (to the same size our model was trained on)
+  img = tf.image.resize(img, size = [img_shape, img_shape])
+
+  # Rescale the image (get all values between 0 and 1)
+  img = img/255.
+  return img
+
+def pred_and_plot(model, filename, class_names):
+  """
+  Imports an image located at filename, makes a prediction on it with
+  a trained model and plots the image with the predicted class as the title.
+  """
+  # Import the target image and preprocess it
+  img = load_and_prep_image(filename)
+
+  # Make a prediction
+  pred = model.predict(tf.expand_dims(img, axis=0))
+  print(len(pred[0]))
+  print(tf.argmax(pred))
+  if len(pred[0]) > 1:
+    pred_class = class_names[tf.argmax(pred[0])]
+  else:
+    pred_class = class_names[int(tf.round(pred)[0][0])]
+
+  # Plot the image and predicted class
+  plt.imshow(img)
+  plt.title(f"Prediction: {pred_class}")
+  plt.axis(False);
+
+  import itertools
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import numpy as np
+
+def make_confusion_matrix(y_true, y_pred, classes=None, figsize=(10, 10), text_size=15):
+    """
+    Create and display a confusion matrix.
+    
+    Args:
+        y_true (array-like): True labels.
+        y_pred (array-like): Predicted labels.
+        classes (list): List of class names.
+        figsize (tuple): Figure size for the plot.
+        text_size (int): Font size for the text in the plot.
+    """
+    # Create confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]  # Normalize confusion matrix
+
+    # Create a figure and axis
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Create matrix plot
+    cax = ax.matshow(cm, cmap=plt.cm.Blues)
+    fig.colorbar(cax)
+
+    # Create class labels
+    if classes:
+        labels = classes
+    else:
+        labels = np.arange(cm.shape[0])
+
+    # Label the axes
+    ax.set(title='Confusion Matrix',
+           xlabel='Predicted Label',
+           ylabel='True Label',
+           xticks=np.arange(len(labels)),
+           yticks=np.arange(len(labels)),
+           xticklabels=labels,
+           yticklabels=labels)
+
+    # Set threshold for different colors
+    threshold = (cm.max() + cm.min()) / 2.
+
+    # Plot text on each cell
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, f'{cm[i, j]} ({cm_norm[i, j] * 100:.1f}%)',
+                 horizontalalignment='center',
+                 color='white' if cm[i, j] > threshold else 'black',
+                 size=text_size)
+
+    plt.show()
+
+# Example usage
+# y_true = np.array([...])  # Replace with your true labels
+# y_pred = np.array([...])  # Replace with your predicted labels
+# class_names = ['Class 1', 'Class 2', 'Class 3']  # Replace with your class names
+
+# make_confusion_matrix(y_true, y_pred, classes=class_names)
+def get_lines(filename):
+   with open(filename, 'r') as f:
+    return f.readlines()
+def preprocess_text_with_line_numbers(filename):
+  input_lines = get_lines(filename)
+  abstract_lines = ""
+  abstract_samples = []
+  for line in input_lines:
+    if line.startswith('###'):
+      abstract_id = line
+      abstract_lines = ""
+    elif line.isspace():
+      abstract_line_split = abstract_lines.splitlines()
+      for abstract_line_number, abstract_line in enumerate(abstract_line_split):
+        line_data = {}
+        target_text_split = abstract_line.split('\t')
+        line_data['line_number'] = abstract_line_number
+        line_data['target'] = target_text_split[0]
+        line_data['text'] = target_text_split[1].lower()
+        line_data['total_line'] = len(abstract_line_split) -1
+        abstract_samples.append(line_data)
+    else:
+      abstract_lines += line
+  return abstract_samples
